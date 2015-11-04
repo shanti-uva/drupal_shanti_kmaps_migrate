@@ -1,0 +1,29 @@
+function shanti_kmaps_migrate_menu() {
+  return array(
+    'admin/config/content/shanti_kmaps_migrate' => array(
+      'title'             => 'SHANTI KMaps Migrate',
+      'description'       => 'Migrate KMaps Fields data to KMaps vocabulary fields.',
+      'page callback'     => 'drupal_get_form',
+      'page arguments'    => array('shanti_kmaps_migrate_admin'),      
+      'type'              => MENU_NORMAL_ITEM,
+      'access arguments'  => array('administer taxonomy'),
+    );
+}
+
+function shanti_kmaps_migrate_admin () {
+  $form['shanti_kmaps_migrate_src_field'] = array(
+    '#type'           => 'input',
+    '#title'          => t("Source field"),
+    '#description'    => t("The machine name of the source field."),
+    '#default_value'  => variable_get('shanti_kmaps_migrate_src_field', 0),
+  );
+  $form['shanti_kmaps_migrate_dst_field'] = array(
+    '#type'           => 'input',
+    '#title'          => t("Target field"),
+    '#description'    => t("The machine name of the target field (the one to be updated)."),
+    '#default_value'  => variable_get('shanti_kmaps_migrate_src_field', 0),
+  );
+  return system_settings_form($form);
+}
+
+

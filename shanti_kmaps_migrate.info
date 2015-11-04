@@ -1,0 +1,10 @@
+name = SHANTI KMaps Migrate
+description = Migrate KMap Fields data to KMap vocabulary fields.
+core = 7.x
+package = SHANTI
+
+configure = admin/config/content/shanti_kmaps_migrate
+
+dependencies[] = shanti_kmaps_admin
+dependencies[] = shanti_kmaps_vocabularies
+dependencies[] = shanti_kmaps_fields
