@@ -1,29 +1,82 @@
+<?php 
+
 function shanti_kmaps_migrate_menu() {
-  return array(
-    'admin/config/content/shanti_kmaps_migrate' => array(
-      'title'             => 'SHANTI KMaps Migrate',
-      'description'       => 'Migrate KMaps Fields data to KMaps vocabulary fields.',
-      'page callback'     => 'drupal_get_form',
-      'page arguments'    => array('shanti_kmaps_migrate_admin'),      
-      'type'              => MENU_NORMAL_ITEM,
-      'access arguments'  => array('administer taxonomy'),
-    );
+  $menu = array();
+  $menu['admin/config/content/shanti_kmaps_migrate'] = array(
+    'title'             => 'SHANTI KMaps Migrate',
+    'description'       => 'Migrate KMaps Fields data to KMaps vocabulary fields.',
+    'page callback'     => 'drupal_get_form',
+    'page arguments'    => array('shanti_kmaps_migrate_admin'),      
+    'type'              => MENU_NORMAL_ITEM,
+    'access arguments'  => array('administer taxonomy'),
+  );
+  return $menu;
 }
 
-function shanti_kmaps_migrate_admin () {
+function shanti_kmaps_migrate_admin($form, &$form_state) {
+
+  // Get all KMaps Fields fields
+  $src_fields = array();
+  $sql = "select field_name from {field_config} where type like 'shanti_kmaps_fields_default'";
+  $rs = db_query($sql);
+  while ($r = $rs->fetchObject()) {
+    $src_fields[] = $r->field_name;
+  }
+    
+  // Get all taxonomy term fields that point to a KMaps Vocabulary
+  $dst_fields = array();
+  $sql = "select field_name from field_config where type rlike 'term' and data rlike 'kmaps_(places|subjects)'";
+  $rs = db_query($sql);
+  while ($r = $rs->fetchObject()) {
+    $dst_fields[] = $r->field_name;
+  }
+
   $form['shanti_kmaps_migrate_src_field'] = array(
-    '#type'           => 'input',
+    '#type'           => 'select',
     '#title'          => t("Source field"),
     '#description'    => t("The machine name of the source field."),
+    '#options'        => $src_fields,
     '#default_value'  => variable_get('shanti_kmaps_migrate_src_field', 0),
   );
   $form['shanti_kmaps_migrate_dst_field'] = array(
-    '#type'           => 'input',
+    '#type'           => 'select',
     '#title'          => t("Target field"),
     '#description'    => t("The machine name of the target field (the one to be updated)."),
+    '#options'        => $dst_fields,
     '#default_value'  => variable_get('shanti_kmaps_migrate_src_field', 0),
   );
-  return system_settings_form($form);
+  $form['shanti_kmaps_migrate_submit_button'] = array(
+    '#type' => 'submit',
+    '#value' => t('Run process'),
+  );
+  
+  return $form;
+}
+
+function shanti_kmaps_migrate_admin_submit($form, &$form_state) {
+  $src_field = $form_state['values']['shanti_kmaps_migrate_src_field'];
+  $dst_field = $form_state['values']['shanti_kmaps_migrate_dst_field'];
+  $batch_def = array(
+    'operations' => array(
+      array('shanti_kmaps_migrate_migrate', array($src_field,$dst_field)),    
+    ),
+    'finished'          => 'shanti_kmaps_migrate_migrate_finished',
+    'title'             => t("Migrate Start"),
+    'init_message'      => t("Migrate is getting ready."),
+    'progress_message'  => t("Migrate is working."),
+    'error_message'     => t('Uh oh, Migrate has encountered an error.'),    
+  );
+  batch_set($batch_def);
+  batch_process('admin/config/content/shanti_kmaps_migrate');
+}
+
+function shanti_kmaps_migrate_migrate($domain, &$context) {
+
+
+}
+
+function shanti_kmaps_migrate_migrate_finished($domain, &$context) {
+
 }
 
 
