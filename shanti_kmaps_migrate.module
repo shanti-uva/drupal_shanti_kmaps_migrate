@@ -30,7 +30,9 @@ function shanti_kmaps_migrate_admin($form, &$form_state) {
   while ($r = $rs->fetchObject()) {
     $dst_fields[] = $r->field_name;
   }
-
+	$form['shanti_kmaps_migrate_info'] = array(
+		'#markup'					=> t('Back up your data before you use this. There is no protection against choosing the wrong source and target fields below.'),
+	);
   $form['shanti_kmaps_migrate_src_field'] = array(
     '#type'           => 'select',
     '#title'          => t("Source field"),
@@ -54,14 +56,16 @@ function shanti_kmaps_migrate_admin($form, &$form_state) {
 }
 
 function shanti_kmaps_migrate_admin_submit($form, &$form_state) {
-  $src_field = $form_state['values']['shanti_kmaps_migrate_src_field'];
-  $dst_field = $form_state['values']['shanti_kmaps_migrate_dst_field'];
+  $src_field_idx = $form_state['values']['shanti_kmaps_migrate_src_field'];
+  $dst_field_idx = $form_state['values']['shanti_kmaps_migrate_dst_field'];
+	$src_field = $form_state['complete form']['shanti_kmaps_migrate_src_field']['#options'][$src_field_idx];
+	$dst_field = $form_state['complete form']['shanti_kmaps_migrate_dst_field']['#options'][$dst_field_idx];
   $batch_def = array(
     'operations' => array(
       array('shanti_kmaps_migrate_migrate', array($src_field,$dst_field)),    
     ),
     'finished'          => 'shanti_kmaps_migrate_migrate_finished',
-    'title'             => t("Migrate Start"),
+    'title'             => t("KMaps Migration ($src_field &raquo; $dst_field)"),
     'init_message'      => t("Migrate is getting ready."),
     'progress_message'  => t("Migrate is working."),
     'error_message'     => t('Uh oh, Migrate has encountered an error.'),    
@@ -70,13 +74,58 @@ function shanti_kmaps_migrate_admin_submit($form, &$form_state) {
   batch_process('admin/config/content/shanti_kmaps_migrate');
 }
 
-function shanti_kmaps_migrate_migrate($domain, &$context) {
+function shanti_kmaps_migrate_migrate($src_field, $dst_field, &$context) {
+	
+ if (!isset($context['sandbox']['progress'])) {
+    $context['sandbox']['progress'] = 0;
 
-
+    // Get nodes associated with source field
+    $context['results']['nodes'] = array();
+    $sql = "SELECT DISTINCT entity_id FROM {field_data_{$src_field}} WHERE entity_type = 'node'";
+    $rs = db_query($sql);
+    while ($r = $rs->fetchObject()) {
+      $context['results']['nodes'][] = $r->entity_id;
+    }
+    $context['results']['src_field']  = $src_field;
+    $context['results']['dst_field']  = $dst_field;
+    $context['results']['max']        = count($context['results']['nodes']);
+    $context['results']['processed']  = 0;
+  }
+  
+  $count = 50;
+  $node_count = count($context['results']['nodes']);
+  if ($node_count < $count) { $count = $node_count; }
+  $context['message'] = t("Migrated " . $context['sandbox']['progress'] . " of " . $context['results']['max'] . " nodes.");
+	$sql = "SELECT entity_id as 'tid' FROM {field_data_field_sameas_kmapid} WHERE bundle = :bundle AND field_sameas_kmapid_value = :kmap_id AND entity_type = 'taxonomy_term'";
+  for ($i = 0; $i < $count; $i++) {
+  	$node_id = array_shift($context['results']['nodes']);
+		$node = node_load($node_id);
+		$lang = $node->language;
+		foreach ($node->{$src_field}[$lang] as $delta => $kmap) {
+	    $rs = db_query($sql, array(':bundle' => 'kmaps_'.$kmap['domain'], ':kmap_id' => $kmap['id']));
+			while ($r = $rs->fetchObject()) {
+				$node->{$dst_field}[$lang][$delta]['tid'] = $r->tid;
+			}	
+		}
+		field_attach_update('node', $node);
+		#node_save($node);
+    $context['results']['processed']++;
+    $context['sandbox']['progress']++;
+  }
+  if ($context['sandbox']['progress'] != $context['results']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['results']['max'];
+  } 
 }
 
-function shanti_kmaps_migrate_migrate_finished($domain, &$context) {
-
+function shanti_kmaps_migrate_migrate_finished($success, $results, $operations) {
+  if ($success) {
+    $message = $results['processed'] . ' of ' . $results['max'] .  ' nodes migrated.';
+    drupal_set_message($message);
+  } else {
+    $error_operation = reset($operations);
+    $message = t('An error occurred while processing %error_operation with arguments: @arguments', array('%error_operation' => $error_operation[0], '@arguments' => print_r($error_operation[1], TRUE)));
+    drupal_set_message($message, 'error');
+  }
 }
 
 
